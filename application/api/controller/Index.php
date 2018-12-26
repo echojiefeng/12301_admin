@@ -23,7 +23,19 @@ class Index extends Api
     {
         $this->success('请求成功');
     }
-    
+
+    /**
+     * 获取微信的getToken
+     *
+     */
+    public function getToken()
+    {
+        $this->success('请求成功');
+    }
+
+
+
+
     /**
      * 轮播图图片
      *
