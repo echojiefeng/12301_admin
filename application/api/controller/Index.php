@@ -14,6 +14,10 @@ class Index extends Api
     protected $noNeedLogin = ['*'];
     protected $noNeedRight = ['*'];
     const constant = 'http://localhost/hntravel/public';
+    const appid = 'wxdbf7888dec209c6b';
+    const secret = '6266f6a95b97d6552fd493acff13a6fa';
+    const wxUrl = 'http://zjf.strawbeer.xyz/';
+
 
     /**
      * 首页
@@ -30,11 +34,107 @@ class Index extends Api
      */
     public function getToken()
     {
-        $this->success('请求成功');
+        $tokenItem =  Db::name('wx_token')->where('appid',self::appid)->select();
+        if($tokenItem && $tokenItem[0]['create_time'] + $tokenItem[0]['expires'] > time() ){
+//            $this->success('获取token成功',$tokenItem[0]['token']);
+            return $tokenItem[0]['token'];
+        } else {
+            $url = 'https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid='.self::appid.'&secret='.self::secret;
+            $reslutData = $this->curl_request($url);
+            $reslutData = json_decode($reslutData);
+            $data = [
+                'token' => $reslutData->access_token,
+                'appid' => self::appid,
+                'expires' => $reslutData->expires_in,
+                'create_time' => time(),
+            ];
+            if($tokenItem){
+                $res = Db::name('wx_token')->where('appid',self::appid)->update(['token' => $reslutData->access_token]) ;
+                if($res){
+//                    $this->success('更新token成功',$reslutData->access_token);
+                    return $reslutData->access_token;
+                }else{
+//                    $this->error('更新token失败');
+                    return false;
+                }
+            } else {
+                $result =  Db::name('wx_token')->insert($data);
+                if($result == 1){
+//                    $this->success('首次保存token成功',$reslutData->access_token);
+                    return $reslutData->access_token;
+                } else {
+//                    $this->error('首次获取token失败');
+                    return false;
+                }
+            }
+        }
+    }
+
+    /**
+     * 获取jssdk签名
+     *
+     */
+    function signature()
+    {
+        $responseData['token'] = $this->getToken();
+        if($responseData['token']){
+            $url = 'https://api.weixin.qq.com/cgi-bin/ticket/getticket?access_token='.$responseData['token'].'&type=jsapi';
+            $responseData['ticket'] = json_decode($this->curl_request($url))->ticket;
+//            $responseData['noncestr'] = 'qVWUagyCVFUgZk5a';
+            $responseData['noncestr'] = $this->createNonceStr();
+            $responseData['timestamp'] = time();
+//            $responseData['timestamp'] = '1546047268';
+            $responseData['url'] = 'http://zjf.strawbeer.xyz/';
+            $responseData['str'] = 'jsapi_ticket='.$responseData['ticket'].'&noncestr='.$responseData['noncestr'].'&timestamp='.$responseData['timestamp'].'&url='.$responseData['url'];
+            $signature = sha1($responseData['str']);
+            $this->success('获取ticket成功',$responseData);
+        } else {
+            $this->error('获取token失败');
+        }
     }
 
 
+    function createNonceStr($length = 16)
+    {
+        $chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        $str = "";
+        for ($i = 0; $i < $length; $i++) {
+            $str .= substr($chars, mt_rand(0, strlen($chars) - 1), 1);
+        }
+        return $str;
+    }
 
+    function testaaaa()
+    {
+        $data['test'] = time();
+        $data['sdf'] = self::appid;
+        $this->success('请求成功hahh',$data);
+    }
+
+    function curl_request($url,$method='get',$data=null,$https=true){
+        //1.初识化curl
+        $ch = curl_init($url);
+        //2.根据实际请求需求进行参数封装
+        //返回数据不直接输出
+        curl_setopt($ch,CURLOPT_RETURNTRANSFER,true);
+        //如果是https请求
+        if($https === true){
+            curl_setopt($ch,CURLOPT_SSL_VERIFYPEER,false);
+            curl_setopt($ch,CURLOPT_SSL_VERIFYHOST,false);
+        }
+        //如果是post请求
+        if($method === 'post'){
+            //开启发送post请求选项
+            curl_setopt($ch,CURLOPT_POST,true);
+            //发送post的数据
+            curl_setopt($ch,CURLOPT_POSTFIELDS,$data);
+        }
+        //3.发送请求
+        $result = curl_exec($ch);
+        //4.返回返回值，关闭连接
+        curl_close($ch);
+        return $result;
+    }
 
     /**
      * 轮播图图片
